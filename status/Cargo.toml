@@ -1,0 +1,7 @@
+[package]
+name = "status"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+player ={ path = "../player"}

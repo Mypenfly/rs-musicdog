@@ -1,0 +1,13 @@
+[package]
+name = "musicdog"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+tui = { path = "../tui"}
+
+clap = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+tokio = { workspace = true }
+ratatui = { workspace = true }
