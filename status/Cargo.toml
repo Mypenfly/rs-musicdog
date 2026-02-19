@@ -5,3 +5,4 @@ version.workspace = true
 
 [dependencies]
 player ={ path = "../player"}
+notify-rust = "4.10.0"

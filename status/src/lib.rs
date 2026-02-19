@@ -1,6 +1,7 @@
 use player::Song;
 use player::core::PlayerState;
 use std::time::{Duration, Instant};
+pub mod messege;
 
 //应用状态
 #[derive(Debug, PartialEq, Default)]

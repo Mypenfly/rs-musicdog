@@ -9,7 +9,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
 };
-use status::{Page, Player, Status};
+use status::{Page, Player, Status, messege};
 use std::{io, path::PathBuf};
 use tokio::select;
 mod ui;
@@ -30,6 +30,7 @@ pub struct App {
     pub input: String,
     pub keyword_lock: bool,
     pub player: Player,
+    pub messenge: messege::Messenge,
 }
 
 impl App {
@@ -44,6 +45,7 @@ impl App {
         let keyword_lock = false;
 
         let player = Player::new();
+        let messenge = messege::Messenge::default();
 
         Self {
             state,
@@ -53,6 +55,7 @@ impl App {
             input,
             keyword_lock,
             player,
+            messenge,
         }
     }
 
@@ -100,15 +103,12 @@ impl App {
                     self.player.state = state;
                     match state {
                         PlayerState::Stopped => {
-                            if self.player.list.current_index + 1 < self.player.list.items.len() {
-                                self.player.list.current_index += 1;
-                                let song = self.player.follow_index();
-                                let _ = cmd_tx.send(PlayerCommand::Play(song.clone())).await;
-                                self.player.play(song);
-                            }else {
-                                self.player.stop();
-                                self.player.state = PlayerState::Ended;
-                            }
+                            self.player.list.current_index = (self.player.list.current_index + 1 ) % self.player.list.items.len();
+                            let next_song = self.player.follow_index();
+                            self.player.play(next_song.clone());
+                            self.messenge.song_changed(&next_song);
+                            let _ = cmd_tx.send(PlayerCommand::Play(next_song)).await;
+
                         },
                         PlayerState::Ended => {
                             self.player.stop();
@@ -189,6 +189,7 @@ impl App {
                     .send(PlayerCommand::Play(selected_song.clone()))
                     .await;
                 self.state = Status::Playing;
+                self.messenge.song_changed(&selected_song);
                 self.player.play(selected_song);
                 Some(())
             }
@@ -214,6 +215,7 @@ impl App {
                     self.page = Page::Playing;
                     self.state = Status::Playing;
                     let _ = player_tx.send(PlayerCommand::Play(song.clone())).await;
+                    self.messenge.song_changed(&song);
                     self.player.play(song);
                     Some(())
                 }
@@ -294,6 +296,7 @@ impl App {
                 }
             }
             KeyCode::Tab => {
+                self.page_stack.push(self.page);
                 self.page = Page::PlayList;
             }
             KeyCode::Esc => {

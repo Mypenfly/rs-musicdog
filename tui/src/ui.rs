@@ -7,19 +7,14 @@ use ratatui::{
 };
 use status::{Player, PlayerList};
 
+const LOGO: &str = include_str!("./assets/logo.txt");
+const COVER: &str = include_str!("./assets/default.txt");
+
 pub fn render_page(frame: &mut Frame, area: Rect, items: &[&str], selected: usize, subtitle: &str) {
     //tui名称
-    let top_title = Paragraph::new(Line::from(vec![
-        Span::raw(""),
-        Span::styled(
-            "MUSIDOG",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(""),
-    ]))
-    .alignment(Alignment::Center)
-    .style(Style::default().add_modifier(Modifier::BOLD));
-
+    let top_title = Paragraph::new(LOGO)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
     //副标题名称
     let sub_title = Paragraph::new(subtitle)
         .style(Style::default().fg(Color::LightGreen))
@@ -28,14 +23,14 @@ pub fn render_page(frame: &mut Frame, area: Rect, items: &[&str], selected: usiz
     //创建一个高亮列表
     let list_items: Vec<ListItem> = items.iter().map(|item| ListItem::new(*item)).collect();
     let list = List::new(list_items)
-        .block(Block::bordered().title("dog"))
+        .block(Block::default().padding(Padding::vertical(2)))
         .highlight_style(Style::default().fg(Color::Red))
         .highlight_symbol("> ");
 
     //# 绘制tui
     //## 布局
     let chunks = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(8),
         Constraint::Length(1),
         Constraint::Min(0),
     ])
@@ -63,24 +58,24 @@ pub fn render_playing(frame: &mut Frame, area: Rect, player: &Player) {
         },
     };
     //tui名称
-    let top_title = Paragraph::new(Line::from(vec![
-        Span::raw(""),
-        Span::styled(
-            "MUSIDOG",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(""),
-    ]))
-    .alignment(Alignment::Center)
-    .style(Style::default().add_modifier(Modifier::BOLD));
-
+    let top_title = Paragraph::new(LOGO)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
     //分区
-    let main_chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
+    let main_chunks = Layout::vertical([Constraint::Length(8), Constraint::Min(0)]).split(area);
 
     let music_chunks = Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(main_chunks[1]);
 
+    let info_chunks = Layout::vertical([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(music_chunks[0]);
     //填入
+
+    let cover_default = Paragraph::new(COVER)
+        .block(Block::default().padding(Padding::horizontal(2)))
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::LightBlue));
+
     let info_text = format!(
         "歌曲：{}\n艺人：{}\n路径：{}",
         song.title,
@@ -88,13 +83,14 @@ pub fn render_playing(frame: &mut Frame, area: Rect, player: &Player) {
         song.song_path.display(),
     );
     let info_para = Paragraph::new(info_text)
+        .block(Block::default().padding(Padding::horizontal(2)))
         .style(Style::default().fg(Color::Blue))
-        .block(Block::bordered().title("歌曲信息"))
         .wrap(Wrap { trim: true });
 
     //渲染
     frame.render_widget(top_title, main_chunks[0]);
-    frame.render_widget(info_para, music_chunks[0]);
+    frame.render_widget(cover_default, info_chunks[0]);
+    frame.render_widget(info_para, info_chunks[1]);
     render_lyrics(frame, music_chunks[1], player);
 }
 pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
@@ -123,9 +119,7 @@ pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
     let (lyrics, idx) = match (song.lyc_lines.as_ref(), index) {
         (Some(lyrics), Some(idx)) => (lyrics, idx),
         _ => {
-            let para = Paragraph::new(Text::raw("暂无歌词"))
-                .block(Block::default().title("歌词").borders(Borders::ALL))
-                .alignment(Alignment::Center);
+            let para = Paragraph::new(Text::raw("暂无歌词")).alignment(Alignment::Center);
             frame.render_widget(para, area);
             return;
         }
@@ -147,9 +141,6 @@ pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
     let display_start = group_start.saturating_sub(context_lines);
     let display_end = (group_end + 1 + context_lines).min(lyrics.len());
 
-    for _ in 0..10 {
-        lines.push(Line::default());
-    }
     for _ in 0..context_lines.saturating_sub(group_start) {
         lines.push(Line::default());
     }
@@ -181,8 +172,8 @@ pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
     }
 
     let para = Paragraph::new(Text::from(lines))
-        .block(Block::default().title("歌词").borders(Borders::ALL))
-        .alignment(Alignment::Center);
+        .alignment(Alignment::Center)
+        .block(Block::default().padding(Padding::horizontal(2)));
 
     frame.render_widget(para, area);
 }
@@ -204,8 +195,8 @@ pub fn render_bar(frame: &mut Frame, area: Rect, player: &Player) {
 
     let (icon, state_color) = match player.state {
         player::core::PlayerState::Playing => ("||", Color::Green),
-        player::core::PlayerState::Stopped => ("|>", Color::Gray),
-        player::core::PlayerState::Ended => ("|>", Color::Gray),
+        player::core::PlayerState::Stopped => ("▶", Color::Gray),
+        player::core::PlayerState::Ended => ("▶️", Color::Gray),
         player::core::PlayerState::Paused => ("..z.Z", Color::Yellow),
     };
     let text = if let Some(song) = &player.curent_song {
@@ -275,7 +266,7 @@ pub fn render_playlist(frame: &mut Frame, area: Rect, selected: usize, queue: &P
         .map(|(i, song)| {
             let line = if i == queue.current_index {
                 Line::from(vec![
-                    Span::styled("|>", Style::default().fg(Color::LightYellow)),
+                    Span::styled("▶", Style::default().fg(Color::LightYellow)),
                     Span::raw(format!("{} - {}", song.title, song.artist)),
                 ])
             } else {

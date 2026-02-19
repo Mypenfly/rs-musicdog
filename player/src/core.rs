@@ -38,9 +38,11 @@ impl PlayerCore {
     }
 
     pub async fn run_player(mut self) {
-        while let Some(cmd) = self.rx.recv().await {
-            let audio_cmd = cmd.clone();
-            let _ = self.tx.send(audio_cmd);
+        loop {
+            if let Some(cmd) = self.rx.recv().await {
+                let audio_cmd = cmd.clone();
+                let _ = self.tx.send(audio_cmd);
+            }
         }
     }
 }
@@ -54,7 +56,16 @@ pub fn audio(
     let mut state = PlayerState::Stopped;
 
     loop {
-        if let Ok(cmd) = rx.recv() {
+        if let Some(s) = &sink
+            && s.empty()
+            && state == PlayerState::Playing
+        {
+            sink = None;
+            state = PlayerState::Stopped;
+            let _ = tx.blocking_send(state);
+        };
+
+        if let Ok(cmd) = rx.try_recv() {
             match cmd {
                 PlayerCommand::Play(song) => {
                     if let Some(s) = sink.take() {
@@ -97,15 +108,6 @@ pub fn audio(
                 }
             }
         }
-
-        if let Some(s) = &sink
-            && s.empty()
-            && state == PlayerState::Playing
-        {
-            sink = None;
-            state = PlayerState::Stopped;
-            let _ = tx.blocking_send(state);
-        };
 
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
