@@ -72,6 +72,8 @@
               valgrind # 内存检查
 
               # 合并音频库
+              openssl
+              pkg-config
             ]
             ++ audioLibs;
 

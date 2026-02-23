@@ -1,6 +1,10 @@
+#文件：lib.rs
+路径：tui/src/lib.rs
+代码如下:
+
+```rust
 use crossterm::event::{self, Event, KeyCode};
 
-use cloudmusic::{CloudCore, User};
 use player::{
     Song,
     core::{PlayerCommand, PlayerCore, PlayerState},
@@ -8,9 +12,9 @@ use player::{
 };
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout},
 };
-use status::{Input, Page, Player, Status, messege};
+use status::{Page, Player, Status, messege};
 use std::{io, path::PathBuf};
 use tokio::select;
 mod ui;
@@ -21,15 +25,8 @@ pub struct LocalSongs {
     pub input_path: String,
     pub songs: Vec<Song>,
 }
-#[derive(Default)]
-pub struct Info {
-    phone: String,
-    passward: String,
-    localpath: String,
-    state: Input,
-}
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct App {
     pub state: Status,
     pub page: Page,
@@ -39,8 +36,6 @@ pub struct App {
     pub keyword_lock: bool,
     pub player: Player,
     pub messenge: messege::Messenge,
-    pub user: User,
-    info: Info,
 }
 
 impl App {
@@ -56,13 +51,6 @@ impl App {
 
         let player = Player::new();
         let messenge = messege::Messenge::default();
-        let user = User::Logout;
-        let info = Info {
-            phone: String::new(),
-            passward: String::new(),
-            localpath: String::new(),
-            state: Input::LocalFind,
-        };
 
         Self {
             state,
@@ -73,8 +61,6 @@ impl App {
             keyword_lock,
             player,
             messenge,
-            user,
-            info,
         }
     }
 
@@ -103,27 +89,18 @@ impl App {
             }
         });
 
-        //网易云核心启动
-        let cloudcore = CloudCore::new();
-
         while self.state != Status::Stopped {
             let list = self.player.list.items.clone();
-            let title_list = list.iter().map(|s| s.title.to_string()).collect();
+            let title_list = list.iter().map(|s| s.title.as_str()).collect();
             let (subtitle, items) = match self.page {
-                Page::Main => (
-                    "首页",
-                    ["0.本地音乐播放", "1.网易云", "2.退出"]
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect(),
-                ),
+                Page::Main => ("首页", vec!["0.本地音乐播放", "1.网易云", "2.退出"]),
                 Page::LocalPlay => ("本地播放", title_list),
                 Page::Input => ("输入", Vec::new()),
                 Page::Playing => ("播放中ing", Vec::new()),
                 Page::PlayList => ("", Vec::new()),
                 Page::CloudMusic => (
                     "网易云☁️",
-                    [
+                    vec![
                         "0.每日推荐单曲",
                         "1.每日推荐歌单",
                         "2.排行榜",
@@ -131,23 +108,13 @@ impl App {
                         "4.我的",
                         "5.搜索",
                         "6.设置",
-                    ]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect(),
+                    ],
                 ),
-                Page::Exit => (
-                    "退出",
-                    ["0.返回", "1.退出"].iter().map(|s| s.to_string()).collect(),
-                ),
-                _ => match cloudcore.back_items(&self.page).await {
-                    Some((subtitle, items)) => (subtitle, items),
-                    None => ("", Vec::new()),
-                },
+                Page::Exit => ("退出", vec!["0.返回", "1.退出"]),
             };
             select! {
                 Some(key_code) = key_rx.recv() => {
-                    self.handle_key(key_code, &items, &cmd_tx,&cloudcore).await;
+                    self.handle_key(key_code, &items, &cmd_tx).await;
                 }
                 Some(state) = std_rx.recv() => {
                     self.player.state = state;
@@ -177,44 +144,36 @@ impl App {
         Ok(())
     }
 
-    fn draw(&mut self, frame: &mut Frame, items_list: &[String], subtitle: &str) {
-        let items: Vec<&str> = items_list.iter().map(|s| s.as_str()).collect();
+    fn draw(&mut self, frame: &mut Frame, items: &[&str], subtitle: &str) {
         match self.state {
             Status::Playing => {
                 let chunks = Layout::vertical([Constraint::Min(0), Constraint::Length(3)])
                     .split(frame.area());
                 match self.page {
                     Page::Input => {
-                        self.draw_input(frame, chunks[0]);
+                        ui::render_input(frame, chunks[0], self.input.as_str(), "输入地址")
                     }
                     Page::Playing => ui::render_playing(frame, chunks[0], &self.player),
                     Page::PlayList => {
                         ui::render_playlist(frame, chunks[0], self.selected, &self.player.list);
                     }
-                    _ => ui::render_page(frame, chunks[0], &items, self.selected, subtitle),
+                    _ => ui::render_page(frame, chunks[0], items, self.selected, subtitle),
                 };
                 ui::render_bar(frame, chunks[1], &self.player);
             }
             _ => match self.page {
                 Page::Input => {
-                    self.draw_input(frame, frame.area());
+                    ui::render_input(frame, frame.area(), self.input.as_str(), "输入地址")
                 }
                 Page::Playing => ui::render_playing(frame, frame.area(), &self.player),
                 Page::PlayList => {
                     ui::render_playlist(frame, frame.area(), self.selected, &self.player.list);
                 }
-                _ => ui::render_page(frame, frame.area(), &items, self.selected, subtitle),
+                _ => ui::render_page(frame, frame.area(), items, self.selected, subtitle),
             },
         }
     }
 
-    fn draw_input(&mut self, frame: &mut Frame, area: Rect) {
-        match self.info.state {
-            Input::LocalFind => ui::render_input(frame, area, self.input.as_str(), "输入地址"),
-            Input::Phone => ui::render_input(frame, area, self.input.as_str(), "登陆：电话号码"),
-            Input::Passward => ui::render_input(frame, area, self.input.as_str(), "登陆：输入密码"),
-        }
-    }
     async fn operate(
         &mut self,
         player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>,
@@ -223,9 +182,8 @@ impl App {
             Page::Main => {
                 if self.selected == 0 {
                     self.selected = 0;
-                    if self.player.locallist.items.is_empty() {
+                    if self.player.list.items.is_empty() {
                         self.page = Page::Input;
-                        self.info.state = Input::LocalFind;
                         self.keyword_lock = true;
                     } else {
                         self.page = Page::LocalPlay;
@@ -233,14 +191,7 @@ impl App {
                     Some(())
                 } else if self.selected == 1 {
                     self.selected = 0;
-                    match self.user {
-                        User::Login => self.page = Page::CloudMusic,
-                        User::Logout=> {
-                            self.keyword_lock = true;
-                            self.page = Page::Input;
-                            self.info.state = Input::Phone;
-                        }
-                    }
+                    self.page = Page::CloudMusic;
                     Some(())
                 } else {
                     self.selected = 0;
@@ -290,10 +241,7 @@ impl App {
                     Some(())
                 }
             }
-            Page::CloudMusic => {
-                self.page = Page::EveryDaySingle;
-                Some(())
-            },
+            Page::CloudMusic => Some(()),
             Page::Exit => {
                 if self.selected == 0 {
                     self.selected = 0;
@@ -304,16 +252,14 @@ impl App {
                     None
                 }
             }
-            _ => Some(()),
         }
     }
 
     async fn handle_key(
         &mut self,
         key: KeyCode,
-        items: &[String],
+        items: &[&str],
         player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>,
-        cloudcore: &CloudCore,
     ) {
         match key {
             KeyCode::Down => match self.page {
@@ -336,16 +282,27 @@ impl App {
                 }
                 _ => self.selected = self.selected.wrapping_sub(1) % items.len(),
             },
-            KeyCode::Enter => match self.page {
-                Page::Input => self.handle_input(cloudcore).await,
-                _ => {
-                    self.push_stack();
+            KeyCode::Enter => {
+                self.push_stack();
+                if self.keyword_lock {
+                    self.page = Page::Input;
+                    let dir_path = PathBuf::from(&self.input);
+                    self.player.list.items = scan(&dir_path);
+                    self.input = String::new();
+                    if self.player.list.items.is_empty() {
+                        self.messenge.warning("填入地址错误，或者不含有歌曲。（建议使用绝对路径）");
+                        self.page = Page::Input;
+                    } else {
+                        self.keyword_lock = false;
+                        self.page = Page::LocalPlay;
+                    }
+                } else {
                     match self.operate(player_tx).await {
                         Some(_) => (),
                         None => self.state = Status::Stopped,
                     }
                 }
-            },
+            }
             KeyCode::Char('q') => {
                 if !self.keyword_lock {
                     self.state = Status::Stopped;
@@ -418,39 +375,5 @@ impl App {
             self.page_stack.push(self.page);
         }
     }
-
-    async fn handle_input(&mut self, cloudcore: &CloudCore) {
-        self.keyword_lock = true;
-        match self.info.state {
-            Input::Phone => {
-                self.info.phone = self.input.clone();
-                self.info.state = Input::Passward;
-                self.page = Page::Input;
-                self.input = String::new();
-            }
-            Input::Passward => {
-                self.info.passward = self.input.clone();
-                match cloudcore.login(&self.info.phone, &self.info.passward).await {
-                    Ok(_) => {
-                        self.page = Page::CloudMusic;
-                        self.user = User::Login;
-                        self.keyword_lock = false;
-                    }
-                    Err(_) => {
-                        self.page = Page::Input;
-                        self.info.state = Input::Phone;
-                    }
-                };
-                self.input = String::new();
-            }
-            Input::LocalFind => {
-                self.info.localpath = self.input.clone();
-                self.player.locallist.items = scan(&PathBuf::from(&self.info.localpath));
-                self.page = Page::LocalPlay;
-                self.player.switch_local();
-                self.input = String::new();
-                self.keyword_lock = false;
-            }
-        }
-    }
 }
+```

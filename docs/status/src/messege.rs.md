@@ -1,18 +1,32 @@
+#文件：messege.rs
+路径：status/src/messege.rs
+代码如下:
+
+```rust
 use notify_rust::{Notification, Timeout};
 use player::Song;
-use std::{ time::Instant};
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct Messenge {
+    pub level: MessengeLevel,
     pub text: String,
     pub time: Instant,
     pub enable: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum MessengeLevel {
+    #[default]
+    Info,
+    Warning,
+    Error,
+}
 
 impl Default for Messenge {
     fn default() -> Self {
         Self {
+            level: MessengeLevel::Info,
             text: String::new(),
             time: Instant::now(),
             enable: true,
@@ -42,22 +56,19 @@ impl Messenge {
     }
 
     pub fn song_changed(&mut self, song: &Song) {
+        self.level = MessengeLevel::Info;
 
         let title = "Info - Now Playing";
         let messenge = format!("{} - {}", song.title, song.artist);
         self.push(messenge, title);
     }
 
-    pub fn warning(&self,warn:&str) {
+    pub fn warning(&mut self,warn:&str) {
+        self.level = MessengeLevel::Warning;
 
         let title = "Warning - Something wrong!!";
         let messenge = format!("Warn:{}",warn);
         self.push(messenge, title);
     }
-
-    pub fn info(&self,info:&str){
-        let title = "Info - everything run in right!!";
-        let messenge = format!("Info:{}",info);
-        self.push(messenge, title);
-    }
 }
+```

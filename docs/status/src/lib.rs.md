@@ -1,3 +1,8 @@
+#文件：lib.rs
+路径：status/src/lib.rs
+代码如下:
+
+```rust
 use player::Song;
 use player::core::PlayerState;
 use std::time::{Duration, Instant};
@@ -21,23 +26,11 @@ pub enum Page {
     Playing,
     PlayList,
     CloudMusic,
-    EveryDaySingle,
-    EveryDaylists,
-    User,
-
     Exit,
 }
 
-#[derive(Debug, Default, PartialEq)]
-pub enum Input {
-    #[default]
-    LocalFind,
-    Phone,
-    Passward,
-}
-
 //播放列表
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct PlayerList {
     pub items: Vec<Song>,
     pub current_index: usize,
@@ -60,8 +53,6 @@ pub struct Player {
     pub pause_time: Option<Instant>,
     pub pause_duration: Duration,
     pub list: PlayerList,
-    pub locallist: PlayerList,
-    pub cloudlist: PlayerList,
 }
 impl Player {
     pub fn new() -> Self {
@@ -72,8 +63,6 @@ impl Player {
             pause_time: None,
             pause_duration: Duration::ZERO,
             list: PlayerList::new(),
-            locallist: PlayerList::new(),
-            cloudlist: PlayerList::new(),
         }
     }
     pub fn play(&mut self, song: Song) {
@@ -125,10 +114,5 @@ impl Player {
         self.curent_song = Some(song.clone());
         song
     }
-    pub fn switch_cloud(&mut self) {
-        self.list = self.cloudlist.clone();
-    }
-    pub fn switch_local(&mut self) {
-        self.list = self.locallist.clone();
-    }
 }
+```
