@@ -11,6 +11,7 @@ pub struct Song {
     pub artist: String,
     pub lyc_lines: Option<Vec<LyricLine>>,
     pub totle_time: Option<Duration>,
+    pub album:String,
 }
 #[derive(Debug, Default, Clone)]
 pub struct LyricLine {
@@ -28,6 +29,7 @@ impl Song {
             .unwrap_or("Unknown")
             .to_string();
         let mut artist = "Unknown".to_string();
+        let album = "Local".to_string();
         let lyc_lines = None;
         let mut totle_time = None;
 
@@ -60,6 +62,7 @@ impl Song {
             artist,
             lyc_lines,
             totle_time,
+            album
         }
     }
     pub fn parse_lyc(&mut self) {

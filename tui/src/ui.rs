@@ -49,12 +49,13 @@ pub fn render_playing(frame: &mut Frame, area: Rect, player: &Player) {
     let song = match player.curent_song.clone() {
         Some(s) => s,
         None => Song {
-            song_path: PathBuf::new(),
+        song_path: PathBuf::new(),
             lyc_path: None,
             title: String::new(),
             artist: String::new(),
             lyc_lines: None,
             totle_time: None,
+            album:"None".to_string()
         },
     };
     //tui名称
@@ -80,7 +81,7 @@ pub fn render_playing(frame: &mut Frame, area: Rect, player: &Player) {
         "歌曲：{}\n艺人：{}\n路径：{}",
         song.title,
         song.artist,
-        song.song_path.display(),
+        song.album,
     );
     let info_para = Paragraph::new(info_text)
         .block(Block::default().padding(Padding::horizontal(2)))
@@ -98,12 +99,13 @@ pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
     let song = match player.curent_song.clone() {
         Some(s) => s,
         None => Song {
-            song_path: PathBuf::new(),
+            song_path: PathBuf,
             lyc_path: None,
             title: String::new(),
             artist: String::new(),
             lyc_lines: None,
             totle_time: None,
+            album:"None".to_string()
         },
     };
     let index = song.lyc_lines.as_ref().and_then(|lyrics| {

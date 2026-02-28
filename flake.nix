@@ -90,6 +90,7 @@
             echo ""
             echo "提示: 如果播放无声音，请检查用户是否在'audio'组:"
             echo "  sudo usermod -a -G audio $USER"
+            nu
 
           '';
 
