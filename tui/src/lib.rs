@@ -1,6 +1,6 @@
 use crossterm::event::{self, Event, KeyCode};
 
-use cloudmusic::{CloudCore, User};
+use cloudmusic::{CloudCore, CloudCoreErr, User};
 use player::{
     Song,
     core::{PlayerCommand, PlayerCore, PlayerState},
@@ -14,6 +14,15 @@ use status::{Input, Page, Player, Status, messege};
 use std::{io, path::PathBuf};
 use tokio::select;
 mod ui;
+
+#[derive(Debug)]
+pub enum AppError {
+    MainError(std::io::Error),
+    CloudError(CloudCoreErr),
+    DrawError(std::io::Error),
+}
+
+pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, Default)]
 pub struct LocalSongs {
@@ -78,7 +87,7 @@ impl App {
         }
     }
 
-    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> AppResult<()> {
         //播放线程准备
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel::<PlayerCommand>(32);
         let (std_tx, mut std_rx) = tokio::sync::mpsc::channel::<PlayerState>(32);
@@ -104,7 +113,7 @@ impl App {
         });
 
         //网易云核心启动
-        let mut cloudcore = CloudCore::new();
+        let mut cloudcore = CloudCore::new().map_err(AppError::CloudError)?;
 
         while self.state != Status::Stopped {
             let list = self.player.list.items.clone();
@@ -140,8 +149,8 @@ impl App {
                     "退出",
                     ["0.返回", "1.退出"].iter().map(|s| s.to_string()).collect(),
                 ),
-                Page::EveryDaySingle => ("每日推荐",title_list),
-                _=>("",Vec::new())
+                Page::EveryDaySingle => ("每日推荐", title_list),
+                _ => ("", Vec::new()),
             };
             select! {
                 Some(key_code) = key_rx.recv() => {
@@ -151,12 +160,14 @@ impl App {
                     self.player.state = state;
                     match state {
                         PlayerState::Stopped => {
-                            self.player.list.current_index = (self.player.list.current_index + 1 ) % self.player.list.items.len();
-                            let next_song = self.player.follow_index();
-                            self.player.play(next_song.clone());
-                            self.messenge.song_changed(&next_song);
-                            let _ = cmd_tx.send(PlayerCommand::Play(next_song)).await;
+                            self.selected = (self.player.list.current_index + 1 ) % self.player.list.items.len();
+                            
 
+                            if self.player.list.items == self.player.locallist.items {
+                                self.jump_playing(&cmd_tx).await;
+                            }else {
+                                self.switch_playing(&cmd_tx, &mut cloudcore).await.ok();
+                            }
                         },
                         PlayerState::Ended => {
                             self.player.stop();
@@ -166,10 +177,12 @@ impl App {
                     }
                 }
                 _ = tokio::time::sleep(tokio::time::Duration::from_millis(16)) =>{
-                    terminal.draw(|frame| self.draw(frame, &items, subtitle))?;
+                    terminal.draw(|frame| self.draw(frame, &items, subtitle)).map_err(AppError::DrawError )?;
                 }
             }
-            terminal.draw(|frame| self.draw(frame, &items, subtitle))?;
+            terminal
+                .draw(|frame| self.draw(frame, &items, subtitle))
+                .map_err(AppError::DrawError)?;
         }
 
         Ok(())
@@ -216,7 +229,7 @@ impl App {
     async fn operate(
         &mut self,
         player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>,
-        cloudcore: &mut CloudCore
+        cloudcore: &mut CloudCore,
     ) -> Option<()> {
         match self.page {
             Page::Main => {
@@ -234,7 +247,7 @@ impl App {
                     self.selected = 0;
                     match self.user {
                         User::Login => self.page = Page::CloudMusic,
-                        User::Logout=> {
+                        User::Logout => {
                             self.keyword_lock = true;
                             self.page = Page::Input;
                             self.info.state = Input::Phone;
@@ -267,24 +280,22 @@ impl App {
                     self.state = Status::Playing;
                     Some(())
                 } else {
-                    self.player.list.current_index = self.selected;
-                    let song = self.player.follow_index();
-                    self.selected = 0;
 
-                    self.page = Page::Playing;
-                    self.state = Status::Playing;
-                    let _ = player_tx.send(PlayerCommand::Play(song.clone())).await;
-                    self.messenge.song_changed(&song);
-                    self.player.play(song);
+                    if self.player.list.items == self.player.locallist.items {
+                        self.jump_playing(player_tx).await;
+                    }else {
+                        self.switch_playing(player_tx, cloudcore).await.ok();
+                    }
+
                     Some(())
                 }
             }
             Page::CloudMusic => {
-                self.player.cloudlist.items=cloudcore.recommand_songs().await;
+                self.player.cloudlist.items = cloudcore.recommand_songs().await;
                 self.player.list.items = self.player.cloudlist.items.clone();
                 self.page = Page::EveryDaySingle;
                 Some(())
-            },
+            }
             Page::Exit => {
                 if self.selected == 0 {
                     self.selected = 0;
@@ -296,9 +307,9 @@ impl App {
                 }
             }
             _ => {
-                self.jump_playing(player_tx).await;
+                self.switch_playing(player_tx, cloudcore).await.ok()?;
                 Some(())
-            },
+            }
         }
     }
 
@@ -334,7 +345,7 @@ impl App {
                 Page::Input => self.handle_input(cloudcore).await,
                 _ => {
                     self.push_stack();
-                    match self.operate(player_tx,cloudcore).await {
+                    match self.operate(player_tx, cloudcore).await {
                         Some(_) => (),
                         None => self.state = Status::Stopped,
                     }
@@ -447,8 +458,8 @@ impl App {
             }
         }
     }
-    async fn jump_playing(&mut self,player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>){
-        
+    ///本地音频跳转
+    async fn jump_playing(&mut self, player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>) {
         self.player.list.current_index = self.selected;
         let selected_song = self.player.follow_index();
         self.selected = 0;
@@ -460,5 +471,32 @@ impl App {
         self.state = Status::Playing;
         self.messenge.song_changed(&selected_song);
         self.player.play(selected_song);
+    }
+
+    ///网络音频播放
+    async fn switch_playing(
+        &mut self,
+        player_tx: &tokio::sync::mpsc::Sender<PlayerCommand>,
+        cloudcore: &mut CloudCore,
+    ) -> io::Result<()> {
+        self.player.list.current_index = self.selected;
+        let selected_song = self.player.follow_index();
+        self.selected = 0;
+
+        //获取id
+        let id = cloudcore.music.song_id(&selected_song.title);
+
+        //下载
+        let final_song = cloudcore.turn_song(&selected_song, id).await;
+
+        self.page = Page::Playing;
+        let _ = player_tx
+            .send(PlayerCommand::Play(final_song.clone()))
+            .await;
+        self.state = Status::Playing;
+        self.messenge.song_changed(&selected_song);
+        self.player.play(final_song);
+
+        Ok(())
     }
 }

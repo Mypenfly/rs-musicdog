@@ -16,4 +16,11 @@ impl CloudSong {
         let pic = HashMap::new();
         Self { song, artists, album, pic }
     }
+    pub fn song_id(&self,index:&str) -> u64{
+        if let Some(id) = self.song.get(index)  {
+            *id
+        }else {
+            0
+        }
+    }
 }

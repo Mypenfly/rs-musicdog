@@ -99,7 +99,7 @@ pub fn render_lyrics(frame: &mut Frame, area: Rect, player: &Player) {
     let song = match player.curent_song.clone() {
         Some(s) => s,
         None => Song {
-            song_path: PathBuf,
+            song_path: PathBuf::new(),
             lyc_path: None,
             title: String::new(),
             artist: String::new(),

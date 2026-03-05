@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Duration};
 use lofty::{Accessor, AudioFile, TaggedFileExt};
 
 //歌曲的相关数据
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone,PartialEq )]
 pub struct Song {
     pub song_path: PathBuf,
     pub lyc_path: Option<PathBuf>,
@@ -13,7 +13,7 @@ pub struct Song {
     pub totle_time: Option<Duration>,
     pub album:String,
 }
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone,PartialEq)]
 pub struct LyricLine {
     pub time: std::time::Duration,
     pub text: String,

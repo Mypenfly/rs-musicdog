@@ -1,5 +1,4 @@
-use std::io;
-use tui::App;
+use tui::{App, AppError, AppResult};
 
 use ratatui::crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -7,14 +6,14 @@ use ratatui::crossterm::{
 };
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> AppResult<()> {
     let mut terminal = ratatui::init();
-    terminal.clear()?;
-    execute!(std::io::stdout(), EnableMouseCapture)?;
+    terminal.clear().map_err(AppError::MainError)?;
+    execute!(std::io::stdout(), EnableMouseCapture).map_err(AppError::MainError)?;
 
     let mut app = App::new();
     let result = app.run(&mut terminal).await;
-    execute!(std::io::stdout(), DisableMouseCapture)?;
+    execute!(std::io::stdout(), DisableMouseCapture).map_err(AppError::MainError)?;
 
     ratatui::restore();
     println!("bye!!!");
